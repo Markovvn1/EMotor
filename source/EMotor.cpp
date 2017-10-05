@@ -35,7 +35,7 @@ void EMotor::resetCount()
 
 int EMotor::getSpeed()
 {
-  return cSpeed;
+  return cSpeed / 100;
 }
 
 void EMotor::update()
@@ -43,8 +43,9 @@ void EMotor::update()
   unsigned long currentTime = millis();
   if (currentTime - oldTime >= INTER_TIME)
   {
-    int newSpeed = (count - oldCount) * 1125 / (int(currentTime) - int(oldTime)) / 2;
-    cSpeed = (cSpeed * 2 + newSpeed * 3) / 5;
+    long newSpeed = (count - oldCount) * 1125 * 50 * 3 / (int(currentTime) - int(oldTime));
+
+    cSpeed = (cSpeed * 2 + newSpeed) / 5;
 
     oldCount = count;
     oldTime = currentTime;
