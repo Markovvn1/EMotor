@@ -10,14 +10,16 @@ void EMotor::setEncoder(int portEA, int portEB)
 {
   this->portEA = portEA;
   this->portEB = portEB;
-  count = 0;
-  cSpeed = 0;
+
+  isEncoder = true;
 
   pinMode(portEA, INPUT);
   pinMode(portEB, INPUT);
 
   int newEPos = (digitalRead(portEA) << 1) | digitalRead(portEB);
   EPos = (newEPos << 4) | (newEPos << 2) | newEPos;
+
+  oldTime = micros();
 }
 
 void EMotor::setMotor(int portInC, int portInSh)
@@ -26,22 +28,18 @@ void EMotor::setMotor(int portInC, int portInSh)
   this->portInSh = portInSh;
 
   isMotor = true;
-  iSpeed = 0;
 
   pinMode(portInC, OUTPUT);
   pinMode(portInSh, OUTPUT);
 
-  setSpeedRaw(0);
+  setRawSpeed(0);
 }
 
 
 
-void EMotor::calcSpeed(char count, long time)
-{
-  cSpeed = long(count) * 562500 / (time);
-}
 
-void EMotor::setSpeedRaw(int speed)
+
+void EMotor::setRawSpeedP(int speed)
 {
   if (speed > 0)
     digitalWrite(portInC, HIGH);
@@ -50,6 +48,8 @@ void EMotor::setSpeedRaw(int speed)
 
   analogWrite(portInSh, speed);
 }
+
+
 
 
 
@@ -70,46 +70,65 @@ void EMotor::resetCount()
 
 int EMotor::getSpeed()
 {
-  return cSpeed;
+  return aSpeed / 50;
 }
 
 void EMotor::setSpeed(int newSpeed)
 {
+  speedSupport = true;
   iSpeed = newSpeed;
+}
+
+void EMotor::setRawSpeed(int newSpeed)
+{
+  speedSupport = false;
+  setRawSpeedP(newSpeed);
 }
 
 void EMotor::update()
 {
-  if (isMotor)
+  if (isEncoder)
   {
-    int pPart = (iSpeed - cSpeed);
-    dMean = dMean * y + pPart * (1 - y);
-    k = k + pk * pPart + dk * (pPart - dMean);
+    int newEPos = (digitalRead(portEA) << 1) | digitalRead(portEB);
+    
+    unsigned long currentTime = micros(); 
+    long time = currentTime - oldTime;
+    if (time > 100000) cSpeed = 0;
 
-    int rSpeed = k * iSpeed / 1000.0;
-
-    if (rSpeed > 255)
+    if (newEPos != (EPos & 3))
     {
-      k = 255000.0 / iSpeed;
-      dMean = 0.0;
-      rSpeed = 255;
+      EPos = ((EPos & 15) << 2) | newEPos;       
+      count += EPosAs[EPos];
+
+      cSpeed = long(EPosAs[EPos]) * 562500 / time; 
+      oldTime = currentTime;
     }
-    setSpeedRaw(rSpeed);
-  }
 
-  int newEPos = (digitalRead(portEA) << 1) | digitalRead(portEB);
-  
-  unsigned long currentTime = micros();
-  long time = currentTime - oldTime;
-  if (time > 100000) calcSpeed(0, 1);
+    aSpeed = (aSpeed * 39 + cSpeed * 50) / 40;
 
-  if (newEPos != (EPos & 3))
-  {
-    EPos = ((EPos & 15) << 2) | newEPos;       
-    count += EPosAs[EPos];
 
-    Serial.println(int(EPosAs[EPos]));
-    calcSpeed(EPosAs[EPos], time);
-    oldTime = currentTime;
+
+    if (isMotor && speedSupport)
+    {
+      int pPart = iSpeed - cSpeed;
+      dMean = dMean * y + pPart * (1 - y);
+      k = k + pk * pPart + dk * (pPart - dMean);
+
+      int rSpeed = k * iSpeed / 1000.0;
+
+      if (rSpeed > 255)
+      {
+        k = 255000.0 / iSpeed;
+        dMean = 0.0;
+        rSpeed = 255;
+      }
+
+      setRawSpeedP(rSpeed);
+    }
+    else
+    {
+      dMean = 0.0;
+      k = 0.0;
+    }
   }
 }
