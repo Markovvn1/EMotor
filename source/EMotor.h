@@ -42,7 +42,7 @@ public:
   void setRawSpeed(int newSpeed);
   int getSpeed();
 
-  void update();
+  bool update();
 };
 
 #endif
