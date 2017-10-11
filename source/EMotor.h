@@ -6,14 +6,16 @@
 class EMotor
 {
 private:
-  int portEA, portEB;
-  int portInC, portInSh;
-  byte EPos;
-  long count;
+  bool isEncoder = false; // Энкодер установлен
+  int portEA, portEB; // Порты энкодера
+  byte EPos; // Информация о вращении энкодера
+  long count = 0; // Текущее положение энкодера (count * 9 / 16 - в градусах)
 
-  bool isMotor = false;
-  int cSpeed;
-  int iSpeed;
+  bool isMotor = false; // Мотор установлен
+  int portInC, portInSh; // Порты мотора
+  int cSpeed = 0; // Текущая скорость (мгновенная скорость)
+  long aSpeed = 0; // Текущая скорость (средняя)
+  int iSpeed = 0; // Скорость, которую нужно поддерживать
 
   float k = 0.0;
   float dMean = 0;
@@ -21,11 +23,14 @@ private:
 
   unsigned long oldTime;
 
-  void calcSpeed(char count, long time);
 
+  bool speedSupport = false; // Включена поддержка скорости
+
+
+  void setRawSpeedP(int speed);
 
 public:
-  void setSpeedRaw(int speed);
+  
   void setEncoder(int portEA, int portEB);
   void setMotor(int portInC, int portInSh);
 
@@ -34,6 +39,7 @@ public:
   void resetCount();
 
   void setSpeed(int newSpeed);
+  void setRawSpeed(int newSpeed);
   int getSpeed();
 
   void update();
