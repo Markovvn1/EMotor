@@ -70,7 +70,7 @@ void EMotor::resetCount()
 
 int EMotor::getSpeed()
 {
-  return aSpeed / 50;
+  return aSpeed / 10;
 }
 
 void EMotor::setSpeed(int newSpeed)
@@ -85,13 +85,15 @@ void EMotor::setRawSpeed(int newSpeed)
   setRawSpeedP(newSpeed);
 }
 
-void EMotor::update()
+bool EMotor::update()
 {
+  bool result = false;
+
   if (isEncoder)
   {
     int newEPos = (digitalRead(portEA) << 1) | digitalRead(portEB);
     
-    unsigned long currentTime = micros(); 
+    unsigned long currentTime = micros();
     long time = currentTime - oldTime;
     if (time > 100000) cSpeed = 0;
 
@@ -99,13 +101,14 @@ void EMotor::update()
     {
       EPos = ((EPos & 15) << 2) | newEPos;       
       count += EPosAs[EPos];
-
+      
       cSpeed = long(EPosAs[EPos]) * 562500 / time; 
       oldTime = currentTime;
+
+      result = true;
     }
 
-    aSpeed = (aSpeed * 39 + cSpeed * 50) / 40;
-
+    aSpeed = (aSpeed * 99 + cSpeed * 10) / 100;
 
 
     if (isMotor && speedSupport)
@@ -131,4 +134,6 @@ void EMotor::update()
       k = 0.0;
     }
   }
+
+  return result;
 }
