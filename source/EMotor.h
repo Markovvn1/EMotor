@@ -3,6 +3,11 @@
 #ifndef LIB_E_MOTOR
 #define LIB_E_MOTOR
  
+enum MotorType
+{
+  rotateDig, rotate, stop, none
+};
+
 class EMotor
 {
 private:
@@ -14,8 +19,10 @@ private:
   bool isMotor = false; // Мотор установлен
   int portInC, portInSh; // Порты мотора
   int cSpeed = 0; // Текущая скорость (мгновенная скорость)
-  long aSpeed = 0; // Текущая скорость (средняя)
+  float aSpeed = 0; // Текущая скорость (средняя)
   int iSpeed = 0; // Скорость, которую нужно поддерживать
+  int iAbsSpeed = 0; // Абсолютная скорость, которую нужно поддерживать
+  int rSpeed = 0; // Скорость, которая подается на моторы
 
   float k = 0.0;
   float dMean = 0;
@@ -24,10 +31,13 @@ private:
   unsigned long oldTime;
 
 
-  bool speedSupport = false; // Включена поддержка скорости
+  MotorType motorType = none;
+  bool invert = false;
+  bool supportSpeed = false;
 
 
   void setRawSpeedP(int speed);
+  void setDirection(bool newInvert);
 
 public:
   
@@ -41,6 +51,11 @@ public:
   void setSpeed(int newSpeed);
   void setRawSpeed(int newSpeed);
   int getSpeed();
+
+  void forward();
+  void backward();
+  void stop(bool fix = true);
+  void rotateDig(int angle);
 
   bool update();
 };
