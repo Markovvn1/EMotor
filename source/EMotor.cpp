@@ -1,8 +1,19 @@
 #include "EMotor.h"
 
+// > 100
 #define y 0.95
 #define pk 0.006
 #define dk 0.04
+
+// 40
+// #define y 0.5
+// #define pk 0.006
+// #define dk 0.08
+
+// 10
+// #define y 0.0
+// #define pk 0.02
+// #define dk 0.4
 
 const char EPosAs[64] = {0, 0, 0, 0, 1, 0, 1, 1,-1,-1, 0,-1, 0,-2, 2, 0, 0,-1,-1,-1, 0, 0, 0, 0, 2, 0, 0,-2, 1, 1, 1, 0, 0, 1, 1, 1,-2, 0, 0, 2, 0, 0, 0, 0,-1,-1,-1, 0, 0, 2,-2, 0,-1, 0,-1,-1, 1, 1, 0, 1, 0, 0, 0, 0};
 
@@ -46,7 +57,19 @@ void EMotor::setRawSpeedP(int speed)
   else
     digitalWrite(portInC, LOW);
 
-  analogWrite(portInSh, speed);
+  analogWrite(portInSh, speed > 0 ? speed : -speed);
+}
+
+void EMotor::setDirection(bool newInvert)
+{
+  motorType = MotorType::rotate;
+
+  if (invert != newInvert)
+  {
+    invert = newInvert;
+    iSpeed = -iSpeed;
+    rSpeed = -rSpeed;
+  }
 }
 
 
@@ -70,30 +93,60 @@ void EMotor::resetCount()
 
 int EMotor::getSpeed()
 {
-  return aSpeed / 10;
+  return int(aSpeed / 10);
 }
 
 void EMotor::setSpeed(int newSpeed)
 {
-  speedSupport = true;
+  supportSpeed = true;
+
   iSpeed = newSpeed;
+  iAbsSpeed = iSpeed > 0 ? iSpeed : -iSpeed;
 }
 
 void EMotor::setRawSpeed(int newSpeed)
 {
-  speedSupport = false;
-  setRawSpeedP(newSpeed);
+  supportSpeed = false;
+
+  rSpeed = newSpeed > 255 ? 255 : newSpeed < -255 ? -255 : newSpeed;
+  // setRawSpeedP(newSpeed);
+}
+
+void EMotor::forward()
+{
+  setDirection(false);
+}
+
+void EMotor::backward()
+{
+  setDirection(true);
+}
+
+void EMotor::stop(bool fix)
+{
+  motorType = fix ? MotorType::stop : MotorType::none;
+}
+
+void EMotor::rotateDig(int angle)
+{
+  motorType = MotorType::rotateDig;
 }
 
 bool EMotor::update()
 {
+  // float ddk = (iSpeed - cSpeed) / 1000.0;
+  // dk = dk * y + ddk * (1 - y);
+  // k = k + n * ddk + n1 * (ddk - dk);
+  // if (k * iSpeed > 255) k = iSpeed / 255.0;
+  // setSpeedRaw(k * iSpeed);
+
   bool result = false;
 
   if (isEncoder)
   {
     int newEPos = (digitalRead(portEA) << 1) | digitalRead(portEB);
     
-    unsigned long currentTime = micros();
+    unsigned long currentTime = micros(); // Error! (currentTime < oldTime)
     long time = currentTime - oldTime;
     if (time > 100000) cSpeed = 0;
 
@@ -101,38 +154,61 @@ bool EMotor::update()
     {
       EPos = ((EPos & 15) << 2) | newEPos;       
       count += EPosAs[EPos];
-      
-      cSpeed = long(EPosAs[EPos]) * 562500 / time; 
+
+      // Serial.println(int(EPosAs[EPos]));
+      cSpeed = long(EPosAs[EPos]) * 562500 / time; // Error! (time < 0)
       oldTime = currentTime;
 
       result = true;
     }
 
-    aSpeed = (aSpeed * 99 + cSpeed * 10) / 100;
+    aSpeed = aSpeed * 0.99 + cSpeed * 0.1;
 
 
-    if (isMotor && speedSupport)
-    {
-      int pPart = iSpeed - cSpeed;
-      dMean = dMean * y + pPart * (1 - y);
-      k = k + pk * pPart + dk * (pPart - dMean);
-
-      int rSpeed = k * iSpeed / 1000.0;
-
-      if (rSpeed > 255)
+    if (isMotor)
+      switch (motorType)
       {
-        k = 255000.0 / iSpeed;
-        dMean = 0.0;
-        rSpeed = 255;
-      }
+        case MotorType::rotateDig:
+          break;
 
-      setRawSpeedP(rSpeed);
-    }
-    else
-    {
-      dMean = 0.0;
-      k = 0.0;
-    }
+
+
+        case MotorType::rotate:
+          if (supportSpeed)
+          {
+            int pPart = iSpeed - cSpeed;
+            dMean = dMean * y + pPart * (1 - y);
+            k = k + pk * pPart + dk * (pPart - dMean);
+
+
+            rSpeed = k * iAbsSpeed / 1000.0;
+
+            if (rSpeed > 255)
+            {
+              k = 255000.0 / iSpeed; // Error
+              dMean = pPart;
+              rSpeed = k * iAbsSpeed / 1000.0;
+            }
+          }
+
+          setRawSpeedP(rSpeed);
+
+          break;
+
+
+
+        case MotorType::stop:
+          setRawSpeedP(0);
+
+          break;
+
+
+
+        case MotorType::none:
+          setRawSpeedP(0);
+
+          break;
+      }
   }
 
   return result;
